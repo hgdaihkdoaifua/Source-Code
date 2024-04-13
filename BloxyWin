@@ -1,0 +1,361 @@
+--// Variables
+local players            = game:GetService("Players")
+local replicatedStorage  = game:GetService("ReplicatedStorage")
+local httpService        = game:GetService("HttpService")
+local virtualUser        = game:GetService("VirtualUser")
+local textChatService    = game:GetService("TextChatService")
+
+local localPlayer        = players.LocalPlayer
+local playerGUI          = localPlayer:WaitForChild("PlayerGui")
+local tradingWindow      = playerGUI:WaitForChild("TradeWindow")
+local tradingMessage     = playerGUI:WaitForChild("Message")
+local tradingStatus      = tradingWindow:WaitForChild("Frame"):WaitForChild("PlayerItems"):WaitForChild("Status")
+local tradingMessages    = tradingWindow:WaitForChild("Frame"):WaitForChild("ChatOverlay"):WaitForChild("Messages")
+
+local library            = replicatedStorage:WaitForChild("Library")
+local saveModule         = require(library:WaitForChild("Client"):WaitForChild("Save"))
+local tradingCommands    = require(library:WaitForChild("Client"):WaitForChild("TradingCmds"))
+local tradingItems       = {}
+
+local tradeId            = 0
+local startTick          = tick()
+
+local tradeUser          = nil
+local goNext             = true
+
+--// Initializing
+print("[Asdwasd Fake Trade Bot] initializing variables...")
+
+local request = request or http_request or http.request
+local websocket = websocket or WebSocket
+local getHwid = getuseridentifier or get_user_identifier or gethwid or get_hwid
+
+--// Functions
+print("[Asdwasd Fake Trade Bot] initializing functions...")
+
+-- Gets the user's pets in their inventory
+local function getHugesTitanics(hugesTitanicsIds)
+    local hugesTitanics = {}
+    
+    for uuid, pet in next, saveModule.Get().Inventory.Pet do
+        if table.find(hugesTitanicsIds, pet.id) then
+            table.insert(hugesTitanics, {
+                ["uuid"]   = uuid,
+                ["id"]     = pet.id,
+                ["type"]   = (pet.pt == 1 and "Golden") or (pet.pt == 2 and "Rainbow") or "Normal",
+                ["shiny"]  = pet.sh or false
+            })
+        end
+    end
+    
+    return hugesTitanics
+end
+
+-- Gets the user's diamonds
+local function getDiamonds()
+    for currencyUid, currency in next, saveModule.Get().Inventory.Currency do
+        if currency.id == "Diamonds" then
+            return currency._am, currencyUid
+        end
+    end
+    
+    return 0
+end
+
+-- Gets all new trade requests
+local function getTrades()
+    local trades          = {}
+    local functionTrades  = tradingCommands.GetAllRequests()
+    
+    for player, trade in next, functionTrades do
+        if trade[localPlayer] then
+            table.insert(trades, player)
+        end
+    end
+    
+    return trades
+end
+-- Returns 0 if you're not in a trade
+local function getTradeId()
+    return (tradingCommands.GetState() and tradingCommands.GetState()._id) or 0
+end
+-- Accepts trade request
+local function acceptTradeRequest(player)
+    return tradingCommands.Request(player)
+end
+-- Rejects trade request
+local function rejectTradeRequest(player)
+    return tradingCommands.Reject(player)
+end
+-- Readies the actual trade
+local function readyTrade()
+    return tradingCommands.SetReady(true)
+end
+-- Declines the actual trade
+local function declineTrade()
+    return tradingCommands.Decline()
+end
+-- Adds pet to trade
+local function addPet(uuid)
+    return tradingCommands.SetItem("Pet", uuid, 1)
+end
+-- Sends a chat message
+local oldMessages = {}
+local function sendMessage(message)
+    local prefix = "BloxLuck | "
+    local cleanMessage = string.gsub(message, "^" .. prefix, "")
+    
+    pcall(function()
+        textChatService.TextChannels.RBXGeneral:SendAsync(cleanMessage)
+    end)
+    pcall(function()
+        task.wait(0.1)
+        tradingCommands.Message(cleanMessage)
+    end)
+    
+    local function countMessages(message, oldMessages)
+        local c = 0
+        for i,v in next, oldMessages do
+            if v == message then
+                c = c + 1
+            end
+        end
+
+        return c
+    end
+
+    if string.find(message, "accepted,") then
+        table.insert(oldMessages, "accepted")
+    end
+    if string.find(message, "Trade Declined") or string.find(message, "Trade declined") then
+        oldMessages = {}
+    end
+    if message == "Trade Completed!" then
+        oldMessages = {}
+    end
+    if countMessages("accepted", oldMessages) > 1 then
+        oldMessages = {}
+        sendMessage("Dupe attempt detected, declining trade")
+        declineTrade()
+    end
+    
+    return true
+end
+
+-- Gets the name of a pet through its asset id
+local function getName(assetIds, assetId)
+    for index, petData in next, assetIds do
+        if table.find(petData.assetIds, assetId) then
+            return petData.name
+        end
+    end
+    
+    return "???"
+end
+-- Checks for huges / titanics
+local function checkItems(assetIds, goldAssetids, nameAssetIds)
+    local items              = {}
+    local itemTotal          = 0
+    local onlyHugesTitanics  = true
+    
+    for index, item in next, tradingWindow.Frame.PlayerItems.Items:GetChildren() do
+        if item.Name == "ItemSlot" then
+            itemTotal = itemTotal + 1
+            
+            if not table.find(assetIds, item.Icon.Image) then
+                onlyHugesTitanics = false
+                break
+            end
+            
+            local name    = getName(nameAssetIds, item.Icon.Image)
+            local rarity  = (item.Icon:FindFirstChild("RainbowGradient") and "Rainbow") or (table.find(goldAssetids, item.Icon.Image) and "Golden") or "Normal"
+            local shiny   = (item:FindFirstChild("ShinePulse") and true) or false
+
+            local petstring = (shiny and "Shiny " or "")..((rarity == "Golden" and "Golden ") or (rarity == "Rainbow" and "Rainbow ") or "")..name
+            
+            table.insert(items, petstring)
+        end 
+    end
+    
+    if itemTotal == 0 then
+        return true, "BloxyWin | Please Deposit Pets!"
+    elseif not onlyHugesTitanics then
+        return true, "BloxyWin | Only Huges and Titanics can be deposited!"
+    else
+        return false, items
+    end
+end
+
+--// Misc Scripts
+print("[Asdwasd Fake Trade Bot] initializing misc features...")
+
+localPlayer.Idled:Connect(function()
+    virtualUser:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+    task.wait(1)
+    virtualUser:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+end)
+
+--// Huges / Titanic detection
+print("[Asdwasd Fake Trade Bot] initializing detections...")
+
+local assetIds          = {}
+local goldAssetids      = {}
+local nameAssetIds      = {}
+local hugesTitanicsIds  = {}
+-- Huges
+for index, pet in next, replicatedStorage.__DIRECTORY.Pets.Huge:GetChildren() do
+    local petData = require(pet)
+    table.insert(assetIds, petData.thumbnail)
+    table.insert(assetIds, petData.goldenThumbnail)
+    table.insert(goldAssetids, petData.goldenThumbnail)
+    table.insert(nameAssetIds, {
+        ["name"]      = petData.name,
+        ["assetIds"]  = {
+            petData.thumbnail,
+            petData.goldenThumbnail
+        }
+    })
+    table.insert(hugesTitanicsIds, petData._id)
+end
+-- Titanics
+for index, pet in next, replicatedStorage.__DIRECTORY.Pets.Titanic:GetChildren() do
+    local petData = require(pet)
+    table.insert(assetIds, petData.thumbnail)
+    table.insert(assetIds, petData.goldenThumbnail)
+    table.insert(goldAssetids, petData.goldenThumbnail)
+    table.insert(nameAssetIds, {
+        ["name"]      = petData.name,
+        ["assetIds"]  = {
+            petData.thumbnail,
+            petData.goldenThumbnail
+        }
+    })
+    table.insert(hugesTitanicsIds, petData._id)
+end
+
+--// Trade ID setting
+spawn(function()
+    while task.wait(1) do
+        tradeId = getTradeId()
+    end
+end)
+
+--// Connection Functions
+print("[Asdwasd Fake  Trade Bot] initializing connects...")
+
+-- Detect accept / declining of the trade
+local function connectMessage(localId, method, tradingItemsFunc)
+    local messageConnection
+    messageConnection = tradingMessage:GetPropertyChangedSignal("Enabled"):Connect(function()
+        if tradingMessage.Enabled then
+            local text = tradingMessage.Frame.Contents.Desc.Text
+            
+            if text == "✅ Trade successfully completed!" then -- Accepted the trade
+                sendMessage("BloxyWin | Trade Completed")
+                messageConnection:Disconnect()
+                
+                task.wait(1)
+                tradingMessage.Enabled = false
+                goNext = true
+            elseif (string.find(text, " cancelled the trade!")) then -- Declined the trade
+                sendMessage("BloxyWin | Trade Declined")
+                messageConnection:Disconnect()
+                
+                task.wait(1)
+                tradingMessage.Enabled = false
+                goNext = true
+            elseif string.find(text, "left the game") then
+                sendMessage("BloxyWin | Trade Declined")
+                messageConnection:Disconnect()
+                
+                task.wait(1)
+                tradingMessage.Enabled = false
+                goNext = true
+            end
+        else
+            goNext = true
+            messageConnection:Disconnect()
+        end
+    end)
+end
+-- Detect when user accepts, make various checks, and accepts the trade
+local function connectStatus(localId, method)
+    local statusConnection
+    statusConnection = tradingStatus:GetPropertyChangedSignal("Visible"):Connect(function()
+        if tradeId == localId then
+            if tradingStatus.Visible then
+                if method == "deposit" then
+                    local error, output = checkItems(assetIds, goldAssetids, nameAssetIds)
+                
+                    if error then
+                        sendMessage(output)
+                    elseif localPlayer.PlayerGui.TradeWindow.Frame.PlayerDiamonds.TextLabel.Text ~= "0" then
+                        sendMessage("BloxyWin | Only Huges and Titanics can be deposited!")
+                    elseif tradingStatus.Visible then
+                        readyTrade()
+                        tradingItems = output
+                    end
+                end
+            end
+        else
+            statusConnection:Disconnect()
+        end
+    end)
+end
+
+--// Main Script
+print("[Asdwasd Fake Trade Bot] initializing main script...")
+
+spawn(function()
+    while task.wait(1) do
+        local incomingTrades = getTrades()
+        
+        if #incomingTrades > 0 and goNext then
+            local trade        = incomingTrades[1]
+            local username     = trade.Name
+            tradeUser          = players:GetUserIdFromNameAsync(username)
+
+            -- Simulated response for testing purposes
+            local response = {["method"] = "Deposit"}
+            
+            if response["method"] == "Not Registered" then
+                sendMessage("Please register before depositing, " .. username)
+                pcall(function()
+                    rejectTradeRequest(trade)
+                end)
+            else
+                local accepted = acceptTradeRequest(trade)
+                    
+                if not accepted then
+                    pcall(function()
+                        rejectTradeRequest(trade)
+                    end)
+                end
+
+                local localId  = getTradeId()
+                tradeId        = localId
+
+                if response["method"] == "Deposit" then -- Deposit
+                    tradingItems  = {}
+
+                    sendMessage("BloxyWin | Trade with: " .. username .. " Accepted: Deposit")
+
+                    -- 60 Second max
+                    spawn(function() 
+                        task.wait(60)
+                        if tradeId == localId then
+                            sendMessage("BloxyWin | Your Trade was Cancelled, as it lasted more than 40 seconds")
+                            declineTrade()
+                        end
+                    end)
+
+                    connectMessage(localId, "deposit", {})
+                    connectStatus(localId, "deposit")
+                    goNext = false
+                end
+            end
+        end
+    end
+end)
+
+print("[Asdwasd Fake Trade Bot] script loaded in " .. tostring(tick() - startTick) .. "s")
