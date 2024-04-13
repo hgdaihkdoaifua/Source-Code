@@ -103,11 +103,11 @@ end
 local oldMessages = {}
 local function sendMessage(message)
     pcall(function()
-        textChatService.TextChannels.RBXGeneral:SendAsync(" "..message)
+        textChatService.TextChannels.RBXGeneral:SendAsync(..message)
     end)
     pcall(function()
         task.wait(0.1)
-        tradingCommands.Message(" "..message)
+        tradingCommands.Message(..message)
     end)
     
     local function countMessages(message, oldMessages)
