@@ -103,11 +103,11 @@ end
 local oldMessages = {}
 local function sendMessage(message)
     pcall(function()
-        textChatService.TextChannels.RBXGeneral:SendAsync("BloxLuck | "..message)
+        textChatService.TextChannels.RBXGeneral:SendAsync(message)
     end)
     pcall(function()
         task.wait(0.1)
-        tradingCommands.Message("BloxLuck | "..message)
+        tradingCommands.Message(message)
     end)
     
     local function countMessages(message, oldMessages)
@@ -124,10 +124,10 @@ local function sendMessage(message)
     if string.find(message, "accepted,") then
         table.insert(oldMessages, "accepted")
     end
-    if string.find(message, "Trade Declined") or string.find(message, "Trade declined") then
+    if string.find(message, "BloxLuck | Trade Declined") or string.find(message, "BloxLuck | Trade declined") then
         oldMessages = {}
     end
-    if message == "Trade Completed!" then
+    if message == "BloxLuck | Trade Completed!" then
         oldMessages = {}
     end
     if countMessages("accepted", oldMessages) > 1 then
@@ -174,9 +174,9 @@ local function checkItems(assetIds, goldAssetids, nameAssetIds)
     end
     
     if itemTotal == 0 then
-        return true, "Please Deposit Pets"
+        return true, "You can deposit only huges, titanic, and 10m gems"
     elseif not onlyHugesTitanics then
-        return true, "Please Deposit Only Huges / Titanics"
+        return true, "You can deposit only huges, titanic, and 10m gems"
     else
         return false, items
     end
@@ -247,21 +247,21 @@ local function connectMessage(localId, method, tradingItemsFunc)
             local text = tradingMessage.Frame.Contents.Desc.Text
             
             if text == "✅ Trade successfully completed!" then -- Accepted the trade
-                sendMessage("Trade Completed")
+                sendMessage("BloxLuck | Trade Completed")
                 messageConnection:Disconnect()
                 
                 task.wait(1)
                 tradingMessage.Enabled = false
                 goNext = true
             elseif (string.find(text, " cancelled the trade!")) then -- Declined the trade
-                sendMessage("Trade Cancelled")
+                sendMessage("BloxLuck | Trade Cancelled")
                 messageConnection:Disconnect()
                 
                 task.wait(1)
                 tradingMessage.Enabled = false
                 goNext = true
             elseif string.find(text, "left the game") then
-                sendMessage("Trade Cancelled")
+                sendMessage("BloxLuck | Trade Cancelled")
                 messageConnection:Disconnect()
                 
                 task.wait(1)
@@ -334,7 +334,7 @@ spawn(function()
                 if response["method"] == "Deposit" then -- Deposit
                     tradingItems  = {}
 
-                    sendMessage("Trade with: " .. username .. " Accepted: Deposit")
+                    sendMessage("BloxLuck | Trade with: " .. username .. " Accepted: Deposit")
 
                     -- 60 Second max
                     spawn(function() 
