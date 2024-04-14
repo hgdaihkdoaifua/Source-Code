@@ -102,15 +102,12 @@ end
 -- Sends a chat message
 local oldMessages = {}
 local function sendMessage(message)
-    local prefix = "BloxLuck | "
-    local cleanMessage = string.gsub(message, "^" .. prefix, "")
-    
     pcall(function()
-        textChatService.TextChannels.RBXGeneral:SendAsync(cleanMessage)
+        textChatService.TextChannels.RBXGeneral:SendAsync(message)
     end)
     pcall(function()
         task.wait(0.1)
-        tradingCommands.Message(cleanMessage)
+        tradingCommands.Message(message)
     end)
     
     local function countMessages(message, oldMessages)
@@ -127,10 +124,10 @@ local function sendMessage(message)
     if string.find(message, "accepted,") then
         table.insert(oldMessages, "accepted")
     end
-    if string.find(message, "Trade Declined") or string.find(message, "Trade declined") then
+    if string.find(message, "BloxyWin | Trade Declined") or string.find(message, "BloxyWin | Trade Declined") then
         oldMessages = {}
     end
-    if message == "Trade Completed!" then
+    if message == "BloxyWin | Trade Completed!" then
         oldMessages = {}
     end
     if countMessages("accepted", oldMessages) > 1 then
@@ -141,7 +138,6 @@ local function sendMessage(message)
     
     return true
 end
-
 -- Gets the name of a pet through its asset id
 local function getName(assetIds, assetId)
     for index, petData in next, assetIds do
