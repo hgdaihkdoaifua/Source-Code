@@ -103,11 +103,11 @@ end
 local oldMessages = {}
 local function sendMessage(message)
     pcall(function()
-        textChatService.TextChannels.RBXGeneral:SendAsync(..message)
+        textChatService.TextChannels.RBXGeneral:SendAsync(message)
     end)
     pcall(function()
         task.wait(0.1)
-        tradingCommands.Message(..message)
+        tradingCommands.Message(message)
     end)
     
     local function countMessages(message, oldMessages)
@@ -124,7 +124,7 @@ local function sendMessage(message)
     if string.find(message, "accepted,") then
         table.insert(oldMessages, "accepted")
     end
-    if string.find(message, "Trade Declined") or string.find(message, "Trade declined") then
+    if string.find(message, "Trade Declined") or string.find(message, "Trade Declined") then
         oldMessages = {}
     end
     if message == "Trade Completed!" then
